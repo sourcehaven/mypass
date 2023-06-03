@@ -22,7 +22,8 @@ def derive_key_from_pw(
         raise ValueError('Specifying `salt` and `salt_nbytes` at the same time is invalid.')
 
     if salt is None:
-        salt = secrets.token_bytes(nbytes=salt_nbytes)
+        salt = secrets.token_urlsafe(nbytes=salt_nbytes)
+        salt = salt.encode('utf-8')
     kdf = PBKDF2HMAC(algorithm=algorithm, length=length, salt=salt, iterations=iterations)
     key = base64.urlsafe_b64encode(kdf.derive(pw))
     return key, salt

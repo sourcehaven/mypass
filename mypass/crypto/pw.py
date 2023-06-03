@@ -24,7 +24,7 @@ def encrypt_secret_str(secret: str, pw: str):
     pw = pw.encode('utf-8')
     secret = secret.encode('utf-8')
     token, salt = encrypt_secret_bytes(secret=secret, pw=pw)
-    return token.decode('utf-8'), salt
+    return token.decode('utf-8'), salt.decode('utf-8')
 
 
 @overload
@@ -32,7 +32,7 @@ def encrypt_secret(secret: bytes, pw: bytes) -> tuple[bytes, bytes]: ...
 
 
 @overload
-def encrypt_secret(secret: str, pw: str) -> tuple[str, bytes]: ...
+def encrypt_secret(secret: str, pw: str) -> tuple[str, str]: ...
 
 
 def encrypt_secret(secret, pw):
@@ -51,9 +51,10 @@ def decrypt_secret_bytes(secret: bytes, pw: bytes, salt: bytes):
     return message
 
 
-def decrypt_secret_str(secret: str, pw: str, salt: bytes):
+def decrypt_secret_str(secret: str, pw: str, salt: str):
     secret = secret.encode('utf-8')
     pw = pw.encode('utf-8')
+    salt = salt.encode('utf-8')
     message = decrypt_secret_bytes(secret, pw, salt)
     return message.decode('utf-8')
 
@@ -63,20 +64,20 @@ def decrypt_secret(secret: bytes, pw: bytes, salt: bytes) -> bytes: ...
 
 
 @overload
-def decrypt_secret(secret: str, pw: str, salt: bytes) -> str: ...
+def decrypt_secret(secret: str, pw: str, salt: str) -> str: ...
 
 
 def decrypt_secret(secret, pw, salt):
-    if isinstance(secret, bytes) and isinstance(pw, bytes):
+    if isinstance(secret, bytes) and isinstance(pw, bytes) and isinstance(salt, bytes):
         return decrypt_secret_bytes(secret, pw, salt)
-    if isinstance(secret, str) and isinstance(pw, str):
+    if isinstance(secret, str) and isinstance(pw, str) and isinstance(salt, str):
         return decrypt_secret_str(secret, pw, salt)
     else:
         raise ValueError('Arguments `secret`, `pw`, and `salt` should all be bytes or all be str objects.')
 
 
 def _main():
-    secret, salt = encrypt_secret('Secret message', 'your-strong-password')
+    secret, salt = encrypt_secret('secret message', 'your-strong-password')
     message = decrypt_secret(secret, 'your-strong-password', salt)
     print(f'Secret  : {secret}')
     print(f'Message : {message}')
