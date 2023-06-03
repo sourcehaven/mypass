@@ -1,8 +1,8 @@
-from flask import Blueprint, Response
+from flask import Blueprint
 
 TeapotApi = Blueprint('teapot', __name__)
 
 
 @TeapotApi.route('/api/teapot', methods=['GET'])
 def teapot():
-    return Response('I am a teapot!', status=418, mimetype='text')
+    return 'I am a teapot!', 418

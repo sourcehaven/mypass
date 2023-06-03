@@ -5,7 +5,7 @@ import waitress
 from flask import Flask
 from flask_jwt_extended import JWTManager
 
-from mypass.api import TeapotApi
+from mypass.api import TeapotApi, CryptoApi
 
 
 class MyPassArgs(Namespace):
@@ -17,6 +17,7 @@ class MyPassArgs(Namespace):
 def run(debug=False, host='0.0.0.0', port=5757):
     app = Flask(__name__)
     app.register_blueprint(TeapotApi)
+    app.register_blueprint(CryptoApi)
 
     jwt_key = 'sourcehaven'
     app.config['JWT_SECRET_KEY'] = jwt_key

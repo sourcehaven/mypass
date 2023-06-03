@@ -2,14 +2,15 @@ import secrets
 from typing import overload
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from mypass.crypto import derive_key_from_pw
 
 
-def init_pw(nbytes: int = 256):
-    return secrets.token_urlsafe(nbytes=nbytes)
+def init_pw(nbytes: int = 256, return_bytes: bool = False):
+    token = secrets.token_urlsafe(nbytes=nbytes)
+    if return_bytes:
+        return token.encode('utf-8')
+    return token
 
 
 def encrypt_secret_bytes(secret: bytes, pw: bytes):
@@ -77,6 +78,9 @@ def decrypt_secret(secret, pw, salt):
 def _main():
     secret, salt = encrypt_secret('Secret message', 'your-strong-password')
     message = decrypt_secret(secret, 'your-strong-password', salt)
+    print(f'Secret  : {secret}')
+    print(f'Message : {message}')
+    print(f'Salt    : {salt}')
 
 
 if __name__ == '__main__':
