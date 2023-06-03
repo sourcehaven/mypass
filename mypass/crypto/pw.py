@@ -22,15 +22,16 @@ def encrypt_secret_bytes(secret: bytes, pw: bytes):
 def encrypt_secret_str(secret: str, pw: str):
     pw = pw.encode('utf-8')
     secret = secret.encode('utf-8')
-    return encrypt_secret_bytes(secret=secret, pw=pw)
+    token, salt = encrypt_secret_bytes(secret=secret, pw=pw)
+    return token.decode('utf-8'), salt
 
 
 @overload
-def encrypt_secret(secret: bytes, pw: bytes): ...
+def encrypt_secret(secret: bytes, pw: bytes) -> tuple[bytes, bytes]: ...
 
 
 @overload
-def encrypt_secret(secret: str, pw: str): ...
+def encrypt_secret(secret: str, pw: str) -> tuple[str, bytes]: ...
 
 
 def encrypt_secret(secret, pw):
@@ -42,23 +43,41 @@ def encrypt_secret(secret, pw):
         raise ValueError('Arguments `secret` and `pw` should be both bytes or both str objects.')
 
 
+def decrypt_secret_bytes(secret: bytes, pw: bytes, salt: bytes):
+    key, salt = derive_key_from_pw(pw=pw, salt=salt)
+    fernet = Fernet(key)
+    message = fernet.decrypt(secret)
+    return message
+
+
+def decrypt_secret_str(secret: str, pw: str, salt: bytes):
+    secret = secret.encode('utf-8')
+    pw = pw.encode('utf-8')
+    message = decrypt_secret_bytes(secret, pw, salt)
+    return message.decode('utf-8')
+
+
+@overload
+def decrypt_secret(secret: bytes, pw: bytes, salt: bytes) -> bytes: ...
+
+
+@overload
+def decrypt_secret(secret: str, pw: str, salt: bytes) -> str: ...
+
+
 def decrypt_secret(secret, pw, salt):
-    pass
+    if isinstance(secret, bytes) and isinstance(pw, bytes):
+        return decrypt_secret_bytes(secret, pw, salt)
+    if isinstance(secret, str) and isinstance(pw, str):
+        return decrypt_secret_str(secret, pw, salt)
+    else:
+        raise ValueError('Arguments `secret`, `pw`, and `salt` should all be bytes or all be str objects.')
+
+
+def _main():
+    secret, salt = encrypt_secret('Secret message', 'your-strong-password')
+    message = decrypt_secret(secret, 'your-strong-password', salt)
 
 
 if __name__ == '__main__':
-    import base64
-    import os
-
-    p = b"password"
-    s = os.urandom(16)
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=s,
-        iterations=480000
-    )
-    k = base64.urlsafe_b64encode(kdf.derive(p))
-    f = Fernet(k)
-    tok = f.encrypt(b"Secret message!")
-    decrypted = f.decrypt(tok)
+    _main()

@@ -10,13 +10,14 @@ def derive_key_from_pw(
         pw: bytes,
         *,
         algorithm: str | HashAlgorithm = 'SHA256',
-        length: int = 256,
+        length: int = 32,
         iterations: int = 480000,
         salt: bytes = None,
         salt_nbytes: int = None
 ):
     if isinstance(algorithm, str):
-        algorithm = getattr(hashes, algorithm)
+        algorithm_cls = getattr(hashes, algorithm)
+        algorithm = algorithm_cls()
     if salt is not None and salt_nbytes is not None:
         raise ValueError('Specifying `salt` and `salt_nbytes` at the same time is invalid.')
 
