@@ -30,6 +30,8 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
 
     app.config['JWT_SECRET_KEY'] = jwt_key
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=10)
+    app.config['JWT_BLACKLIST_ENABLED'] = True
+    app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
     app.config.from_object(__name__)
 
     JWTManager(app)
