@@ -1,14 +1,14 @@
 from flask import Blueprint, request
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 
-AuthApi = Blueprint('auth', __name__)
+from mypass.persistence.blacklist.memory import blacklist
 
-_blacklist = set()
+AuthApi = Blueprint('auth', __name__)
 
 
 @AuthApi.route('/api/auth/signin', methods=['POST'])
 def signin():
-    _blacklist.clear()
+    blacklist.clear()
     son = request.json
     pw = son['pw']
     access_token = create_access_token(identity=pw, fresh=True)
@@ -33,5 +33,5 @@ def refresh():
 @jwt_required()
 def logout():
     jti = get_jwt()['jti']
-    _blacklist.add(jti)
+    blacklist.add(jti)
     return '', 204

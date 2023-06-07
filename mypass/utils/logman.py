@@ -2,7 +2,6 @@ import secrets
 
 import requests
 from requests.auth import AuthBase
-from werkzeug.exceptions import Unauthorized
 
 from mypass.persistence.session.memory import session
 
@@ -58,10 +57,7 @@ def db_refresh(host: str = HOST, *, proxies: dict = None, port: int = None):
     if port is not None:
         proxies = get_proxy_from_port(host, port)
 
-    try:
-        refresh_token = session[REFRESH_TOKEN]
-    except KeyError:
-        raise Unauthorized('INVALID SESSION :: Not found refresh token. Sign in to db api first.')
+    refresh_token = session[REFRESH_TOKEN]
 
     resp = requests.post(f'{host}/api/auth/refresh', proxies=proxies, auth=BearerAuth(token=refresh_token))
     if resp.status_code == 201:
@@ -75,11 +71,11 @@ def db_logout(host: str = HOST, *, proxies: dict = None, port: int = None):
     if port is not None:
         proxies = get_proxy_from_port(host, port)
 
-    try:
-        access_token = session[ACCESS_TOKEN]
-    except KeyError:
-        raise Unauthorized('INVALID SESSION :: Not found access token. Sign in to db api first.')
+    auth = None
+    access_token = session.get(ACCESS_TOKEN, None)
+    if access_token is not None:
+        auth = BearerAuth(token=access_token)
 
-    resp = requests.post(f'{host}/api/auth/logout', proxies=proxies, auth=BearerAuth(token=access_token))
+    resp = requests.delete(f'{host}/api/auth/logout', proxies=proxies, auth=auth)
     if resp.status_code == 204:
         session.clear()

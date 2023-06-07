@@ -40,6 +40,13 @@ class MemSession:
         else:
             return self._session.pop(__key)
 
+    def clear(self):
+        if self._lock is not None:
+            with self._lock:
+                return self._session.clear()
+        else:
+            return self._session.clear()
+
     def __str__(self):
         return str({'session': self._session, 'lock': self._lock})
 

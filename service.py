@@ -1,17 +1,21 @@
+import logging
 from argparse import ArgumentParser, Namespace
 from datetime import timedelta
 
 import waitress
 from flask import Flask
 from flask_jwt_extended import JWTManager
-from flask_session import Session
 
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
+from mypass.exceptions import TokenExpiredException, FreshTokenRequired
+from mypass.utils import hooks
+from mypass.utils.logman import db_signin
 
 HOST = '0.0.0.0'
-PORT = 5758
+PORT = 5757
 JWT_KEY = 'sourcehaven-service'
-SESSION_TYPE = 'redis'
+DB_API_HOST = 'http://localhost'
+DB_API_PORT = 5758
 
 
 class MyPassArgs(Namespace):
@@ -23,23 +27,33 @@ class MyPassArgs(Namespace):
 
 def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
     app = Flask(__name__)
-    app.register_blueprint(AuthApi)
-    app.register_blueprint(CryptoApi)
-    app.register_blueprint(DbApi)
-    app.register_blueprint(TeapotApi)
 
     app.config['JWT_SECRET_KEY'] = jwt_key
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=10)
     app.config['JWT_BLACKLIST_ENABLED'] = True
     app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
+    app.config['DB_API_HOST'] = DB_API_HOST
+    app.config['DB_API_PORT'] = DB_API_PORT
     app.config.from_object(__name__)
 
-    JWTManager(app)
-    Session(app)
+    app.register_blueprint(AuthApi)
+    app.register_blueprint(CryptoApi)
+    app.register_blueprint(DbApi)
+    app.register_blueprint(TeapotApi)
+
+    app.register_error_handler(TokenExpiredException, hooks.TokenExpiredExceptionHandler(max_retries=1))
+    app.register_error_handler(FreshTokenRequired, hooks.FreshTokenRequiredHandler(max_retries=1))
+    app.register_error_handler(KeyError, hooks.MissingSessionKeysHandler())
+
+    jwt = JWTManager(app)
+    jwt.token_in_blocklist_loader(hooks.check_if_token_in_blacklist)
+    db_signin(host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
 
     if debug:
+        logging.basicConfig(level=logging.DEBUG)
         app.run(host=host, port=port, debug=True)
     else:
+        logging.basicConfig(level=logging.ERROR)
         waitress.serve(app, host=host, port=port, channel_timeout=10, threads=1)
 
 
