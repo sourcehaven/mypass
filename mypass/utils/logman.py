@@ -1,9 +1,9 @@
 import secrets
 
 import requests
-from requests.auth import AuthBase
 
 from mypass.persistence.session.memory import session
+from .headers import BearerAuth
 
 ACCESS_TOKEN = 'access_token'
 REFRESH_TOKEN = 'refresh_token'
@@ -14,15 +14,6 @@ PROXIES = {
     'http': f'{HOST}:{PORT}',
     'https': f'{HOST}:{PORT}'
 }
-
-
-class BearerAuth(AuthBase):
-    def __init__(self, token: str):
-        self.token = token
-
-    def __call__(self, r):
-        r.headers['authorization'] = f'Bearer {self.token}'
-        return r
 
 
 def gen_api_key(nbytes: int = None):
@@ -36,7 +27,7 @@ def get_proxy_from_port(host: str, port: int):
     }
 
 
-def db_signin(host: str = HOST, *, proxies: dict = None, port: int = None):
+def db_signin(host: str = HOST, *, proxies: dict = None, port: int = PORT):
     assert proxies is None or port is None, 'Specifying both proxies and port at the same time is invalid.'
     if port is not None:
         proxies = get_proxy_from_port(host, port)
@@ -52,7 +43,7 @@ def db_signin(host: str = HOST, *, proxies: dict = None, port: int = None):
         session[API_KEY] = api_key
 
 
-def db_refresh(host: str = HOST, *, proxies: dict = None, port: int = None):
+def db_refresh(host: str = HOST, *, proxies: dict = None, port: int = PORT):
     assert proxies is None or port is None, 'Specifying both proxies and port at the same time is invalid.'
     if port is not None:
         proxies = get_proxy_from_port(host, port)
@@ -66,7 +57,7 @@ def db_refresh(host: str = HOST, *, proxies: dict = None, port: int = None):
         session[ACCESS_TOKEN] = access_token
 
 
-def db_logout(host: str = HOST, *, proxies: dict = None, port: int = None):
+def db_logout(host: str = HOST, *, proxies: dict = None, port: int = PORT):
     assert proxies is None or port is None, 'Specifying both proxies and port at the same time is invalid.'
     if port is not None:
         proxies = get_proxy_from_port(host, port)

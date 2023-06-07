@@ -5,6 +5,8 @@ from cryptography.fernet import Fernet
 
 from mypass.crypto import derive_key_from_pw
 
+CONNECTOR = '-<(|:::|)>-'
+
 
 def init_pw(nbytes: int = 256, return_bytes: bool = False):
     token = secrets.token_urlsafe(nbytes=nbytes)
@@ -76,12 +78,25 @@ def decrypt_secret(secret, pw, salt):
         raise ValueError('Arguments `secret`, `pw`, and `salt` should all be bytes or all be str objects.')
 
 
+def gen_master_token(pw: str):
+    master_token = init_pw(nbytes=256)
+    master_token_pw = f'{master_token}{CONNECTOR}{pw}'
+    secret, salt = encrypt_secret(master_token_pw, pw)
+    return secret, salt
+
+
 def _main():
     secret, salt = encrypt_secret('secret message', 'your-strong-password')
     message = decrypt_secret(secret, 'your-strong-password', salt)
-    print(f'Secret  : {secret}')
-    print(f'Message : {message}')
-    print(f'Salt    : {salt}')
+    print(f'Secret        : {secret}')
+    print(f'Message       : {message}')
+    print(f'Salt          : {salt}')
+
+    token, salt = gen_master_token('your-strong-password')
+    secret = decrypt_secret(token, 'your-strong-password', salt)
+    master_token, pw = secret.split(CONNECTOR)
+    print(f'Master Token  : {master_token}')
+    print(f'Password      : {pw}')
 
 
 if __name__ == '__main__':

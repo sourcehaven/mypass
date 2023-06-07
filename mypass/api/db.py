@@ -4,8 +4,10 @@ from flask import Blueprint, request
 from flask_jwt_extended import jwt_required
 from werkzeug.exceptions import UnsupportedMediaType
 
+from mypass.middlewares import RaiseErr
 from mypass.persistence.session.memory import session
-from mypass.utils import RaiseErr, logman
+from mypass.utils import BearerAuth
+from mypass import crypto
 
 DbApi = Blueprint('db', __name__)
 
@@ -18,10 +20,12 @@ def create_master_pw():
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
 
+    master_token, salt = crypto.gen_master_token(**son)
+
     resp = requests.post(
         url=f'{host}:{port}/api/db/tiny/master/create',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json=son, auth=logman.BearerAuth(session['access_token']))
+        json={'pw': master_token, 'salt': salt}, auth=BearerAuth(session['access_token']))
 
     return resp.json(), resp.status_code
 
@@ -39,7 +43,8 @@ def query_master_pw():
     resp = requests.post(
         f'{host}:{port}/api/db/tiny/master/read',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json=son, auth=logman.BearerAuth(session['access_token']))
+        json=son, auth=BearerAuth(session['access_token']))
+
     return resp.json(), resp.status_code
 
 

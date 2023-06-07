@@ -1,1 +1,1 @@
-from .hooks import RaiseErr
+from .headers import BearerAuth

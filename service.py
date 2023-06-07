@@ -8,7 +8,7 @@ from flask_jwt_extended import JWTManager
 
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
 from mypass.exceptions import TokenExpiredException, FreshTokenRequired
-from mypass.utils import hooks
+from mypass.middlewares import hooks
 from mypass.utils.logman import db_signin
 
 HOST = '0.0.0.0'
