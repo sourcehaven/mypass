@@ -27,12 +27,11 @@ def get_proxy_from_port(host: str, port: int):
     }
 
 
-def db_signin(host: str = HOST, *, proxies: dict = None, port: int = PORT):
+def db_signin(pw: str, host: str = HOST, *, proxies: dict = None, port: int = PORT):
     assert proxies is None or port is None, 'Specifying both proxies and port at the same time is invalid.'
     if port is not None:
         proxies = get_proxy_from_port(host, port)
 
-    api_key = gen_api_key(64)
     resp = requests.post(f'{host}/api/auth/signin', proxies=proxies, json={'pw': api_key})
     if resp.status_code == 201:
         tokens = resp.json()

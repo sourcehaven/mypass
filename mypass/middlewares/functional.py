@@ -46,35 +46,44 @@ def raise_if_unauthorized(response):
     return response
 
 
-def _re_caller(callback):
+def _get_callee():
     app = flask.current_app
-    host = flask.current_app.config['DB_API_HOST']
-    port = flask.current_app.config['DB_API_PORT']
     package = app.blueprints[request.blueprint].import_name
     module = importlib.import_module(package)
     func_name = request.endpoint.removeprefix(f'{request.blueprint}.')
     func = getattr(module, func_name)
-    callback(host=host, port=port)
-    return func()
+    return func
 
 
 def expired_access_token_handler(e):
     logging.getLogger().warning(e)
     logging.getLogger().info('Re-acquiring non-fresh access token.')
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
     logging.getLogger().info('Retrying previous action.')
-    return _re_caller(logman.db_refresh)
+    func = _get_callee()
+    logman.db_refresh(host=host, port=port)
+    return func()
 
 
 def fresh_access_token_required_handler(e):
     logging.getLogger().warning(e)
     logging.getLogger().info('Acquiring a new fresh access token.')
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
     logging.getLogger().info('Retrying previous action.')
-    return _re_caller(logman.db_signin)
+    func = _get_callee()
+    logman.db_signin(pw=logman.gen_api_key(64), host=host, port=port)
+    return func()
 
 
 def missing_session_keys_handler(e):
     if 'access_token' not in session and 'refresh_token' not in session:
         logging.getLogger().warning(e)
         logging.getLogger().info('Acquiring a new fresh access token.')
+        host = flask.current_app.config['DB_API_HOST']
+        port = flask.current_app.config['DB_API_PORT']
         logging.getLogger().info('Retrying previous action.')
-        return _re_caller(logman.db_signin)
+        func = _get_callee()
+        logman.db_signin(pw=logman.gen_api_key(64), host=host, port=port)
+        return func()

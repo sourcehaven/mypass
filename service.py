@@ -9,7 +9,7 @@ from flask_jwt_extended import JWTManager
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
 from mypass.exceptions import TokenExpiredException, FreshTokenRequired
 from mypass.middlewares import hooks
-from mypass.utils.logman import db_signin
+from mypass.utils.logman import db_signin, gen_api_key
 
 HOST = '0.0.0.0'
 PORT = 5757
@@ -47,7 +47,7 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
 
     jwt = JWTManager(app)
     jwt.token_in_blocklist_loader(hooks.check_if_token_in_blacklist)
-    db_signin(host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
+    db_signin(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
 
     if debug:
         logging.basicConfig(level=logging.DEBUG)
