@@ -7,7 +7,6 @@ from .headers import BearerAuth
 
 ACCESS_TOKEN = 'access_token'
 REFRESH_TOKEN = 'refresh_token'
-API_KEY = 'api_key'
 HOST = 'http://localhost'
 PORT = 5758
 PROXIES = {
@@ -32,14 +31,13 @@ def db_signin(pw: str, host: str = HOST, *, proxies: dict = None, port: int = PO
     if port is not None:
         proxies = get_proxy_from_port(host, port)
 
-    resp = requests.post(f'{host}/api/auth/signin', proxies=proxies, json={'pw': api_key})
+    resp = requests.post(f'{host}/api/auth/signin', proxies=proxies, json={'pw': pw})
     if resp.status_code == 201:
         tokens = resp.json()
         access_token = tokens[ACCESS_TOKEN]
         refresh_token = tokens[REFRESH_TOKEN]
         session[ACCESS_TOKEN] = access_token
         session[REFRESH_TOKEN] = refresh_token
-        session[API_KEY] = api_key
 
 
 def db_refresh(host: str = HOST, *, proxies: dict = None, port: int = PORT):
