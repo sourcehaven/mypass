@@ -2,12 +2,12 @@ import importlib
 import logging
 
 import flask
+import mypass_logman
 from flask import Response, request
+from mypass_logman.persistence import session
 
 from mypass.exceptions import FreshTokenRequired, TokenExpiredException, TokenRevokedException
 from mypass.persistence.blacklist.memory import blacklist
-from mypass.persistence.session.memory import session
-from mypass.utils import logman
 
 
 # noinspection PyUnusedLocal
@@ -62,7 +62,7 @@ def expired_access_token_handler(e):
     port = flask.current_app.config['DB_API_PORT']
     logging.getLogger().info('Retrying previous action.')
     func = _get_callee()
-    logman.db_refresh(host=host, port=port)
+    mypass_logman.refresh(host=host, port=port)
     return func()
 
 
@@ -73,7 +73,7 @@ def fresh_access_token_required_handler(e):
     port = flask.current_app.config['DB_API_PORT']
     logging.getLogger().info('Retrying previous action.')
     func = _get_callee()
-    logman.db_signin(pw=logman.gen_api_key(64), host=host, port=port)
+    mypass_logman.signin(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
     return func()
 
 
@@ -85,5 +85,5 @@ def missing_session_keys_handler(e):
         port = flask.current_app.config['DB_API_PORT']
         logging.getLogger().info('Retrying previous action.')
         func = _get_callee()
-        logman.db_signin(pw=logman.gen_api_key(64), host=host, port=port)
+        mypass_logman.signin(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
         return func()

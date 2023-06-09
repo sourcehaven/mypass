@@ -5,11 +5,13 @@ from datetime import timedelta
 import waitress
 from flask import Flask
 from flask_jwt_extended import JWTManager
+from mypass_logman import signin
+from mypass_logman.logman import gen_api_key
 
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
 from mypass.exceptions import TokenExpiredException, FreshTokenRequired
 from mypass.middlewares import hooks
-from mypass.utils.logman import db_signin, gen_api_key
+from requests.exceptions import ProxyError
 
 HOST = '0.0.0.0'
 PORT = 5757
@@ -47,7 +49,14 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
 
     jwt = JWTManager(app)
     jwt.token_in_blocklist_loader(hooks.check_if_token_in_blacklist)
-    db_signin(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
+    try:
+        signin(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
+    except ProxyError as e:
+        logging.getLogger().error(e)
+        logging.getLogger().critical(
+            'DB API ERROR :: Failed signing into db api.\n'
+            'This may cause unexpected behaviours, errors on db api endpoints, '
+            'and failure on saving passwords. Make sure that the db service is up and running.')
 
     if debug:
         logging.basicConfig(level=logging.DEBUG)

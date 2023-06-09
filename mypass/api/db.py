@@ -2,10 +2,10 @@ import flask
 import requests
 from flask import Blueprint, request
 from flask_jwt_extended import jwt_required, get_jwt_identity
+from mypass_logman.persistence import session
 from werkzeug.exceptions import UnsupportedMediaType
 
 from mypass.middlewares import RaiseErr
-from mypass.persistence.session.memory import session
 from mypass.utils import BearerAuth
 from mypass import crypto
 

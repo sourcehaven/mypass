@@ -2,8 +2,6 @@ from flask import Blueprint, request
 from flask_jwt_extended import create_access_token, create_refresh_token, jwt_required, get_jwt_identity, get_jwt
 
 from mypass.persistence.blacklist.memory import blacklist
-from mypass.persistence.session.memory import session
-from mypass import crypto
 
 AuthApi = Blueprint('auth', __name__)
 

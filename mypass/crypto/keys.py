@@ -6,6 +6,10 @@ from cryptography.hazmat.primitives.hashes import HashAlgorithm
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
+def gen_api_key(nbytes: int = None):
+    return secrets.token_urlsafe(nbytes=nbytes)
+
+
 def derive_key_from_pw(
         pw: bytes,
         *,
