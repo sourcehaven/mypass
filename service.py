@@ -1,6 +1,7 @@
 import logging
 from argparse import ArgumentParser, Namespace
 from datetime import timedelta
+from typing import Optional
 
 import waitress
 from flask import Flask
@@ -13,7 +14,7 @@ from mypass.exceptions import TokenExpiredException, FreshTokenRequired
 from mypass.middlewares import hooks
 from requests.exceptions import ProxyError
 
-HOST = '0.0.0.0'
+HOST = None
 PORT = 5757
 JWT_KEY = 'sourcehaven-service'
 DB_API_HOST = 'http://localhost'
@@ -22,7 +23,7 @@ DB_API_PORT = 5758
 
 class MyPassArgs(Namespace):
     debug: bool
-    host: str
+    host: Optional[str]
     port: int
     jwt_key: str
 
@@ -72,8 +73,8 @@ if __name__ == '__main__':
         '-d', '--debug', action='store_true', default=False,
         help='flag for debugging mode')
     arg_parser.add_argument(
-        '-H', '--host', type=str, default=HOST,
-        help=f'specifies the host for the microservice, defaults to "{HOST}"')
+        '-H', '--host', type=str, default=None,
+        help=f'specifies the host for the microservice, defaults to "{None}"')
     arg_parser.add_argument(
         '-p', '--port', type=int, default=PORT,
         help=f'specifies the port for the microservice, defaults to {PORT}')

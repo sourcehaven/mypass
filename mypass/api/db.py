@@ -23,7 +23,7 @@ def create_master_pw():
     master_token, salt = crypto.gen_master_token(**son)
 
     resp = requests.post(
-        url=f'{host}:{port}/api/db/tiny/master/create',
+        url=f'{host}/api/db/tiny/master/create',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         json={'pw': master_token, 'salt': salt}, auth=BearerAuth(session['access_token']))
 
@@ -41,7 +41,7 @@ def query_master_pw():
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
     resp = requests.post(
-        f'{host}:{port}/api/db/tiny/master/read',
+        f'{host}/api/db/tiny/master/read',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         json=son, auth=BearerAuth(session['access_token']))
 
@@ -67,7 +67,7 @@ def update_master_pw():
     new_pw = son['pw']
 
     resp = requests.post(
-        f'{host}:{port}/api/db/tiny/master/read',
+        f'{host}/api/db/tiny/master/read',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         auth=BearerAuth(session['access_token']))
 
@@ -75,15 +75,16 @@ def update_master_pw():
     if resp.status_code == 200:
         son = resp.json()
         pw, salt = son['pw'], son['salt']
+        # decrypt old master token with password (stored as key) in jwt manager
         secret = crypto.decrypt_secret(pw, key, salt)
         # extract master token before connector string
         master_token = secret.split(crypto.CONNECTOR)[0]
-
+        # encrypt the same master token with the new password
         secret, salt = crypto.encrypt_secret(f'{master_token}{crypto.CONNECTOR}{new_pw}', new_pw)
-
+        # request password update
         resp = requests.post(
             f'{host}:{port}/api/db/tiny/master/update',
             proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-            json={'pw': secret, 'salt': salt})
+            json={'pw': secret, 'salt': salt}, auth=BearerAuth(session['access_token']))
 
     return resp.json(), resp.status_code
