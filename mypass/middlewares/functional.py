@@ -73,7 +73,7 @@ def fresh_access_token_required_handler(e):
     port = flask.current_app.config['DB_API_PORT']
     logging.getLogger().info('Retrying previous action.')
     func = _get_callee()
-    mypass_logman.signin(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
+    mypass_logman.login(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
     return func()
 
 
@@ -85,5 +85,5 @@ def missing_session_keys_handler(e):
         port = flask.current_app.config['DB_API_PORT']
         logging.getLogger().info('Retrying previous action.')
         func = _get_callee()
-        mypass_logman.signin(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
+        mypass_logman.login(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
         return func()

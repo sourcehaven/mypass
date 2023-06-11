@@ -6,8 +6,8 @@ from mypass.persistence.blacklist.memory import blacklist
 AuthApi = Blueprint('auth', __name__)
 
 
-@AuthApi.route('/api/auth/signin', methods=['POST'])
-def signin():
+@AuthApi.route('/api/auth/login', methods=['POST'])
+def login():
     blacklist.clear()
     son = request.json
     pw = son['pw']

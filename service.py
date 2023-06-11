@@ -6,7 +6,7 @@ from typing import Optional
 import waitress
 from flask import Flask
 from flask_jwt_extended import JWTManager
-from mypass_logman import signin
+from mypass_logman import login
 from mypass_logman.logman import gen_api_key
 
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
@@ -51,7 +51,7 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
     jwt = JWTManager(app)
     jwt.token_in_blocklist_loader(hooks.check_if_token_in_blacklist)
     try:
-        signin(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
+        login(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
     except ProxyError as e:
         logging.getLogger().error(e)
         logging.getLogger().critical(
