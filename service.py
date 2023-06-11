@@ -14,7 +14,7 @@ from mypass.exceptions import TokenExpiredException, FreshTokenRequired
 from mypass.middlewares import hooks
 from requests.exceptions import ProxyError
 
-HOST = None
+HOST = 'localhost'
 PORT = 5757
 JWT_KEY = 'sourcehaven-service'
 DB_API_HOST = 'http://localhost'
@@ -73,8 +73,8 @@ if __name__ == '__main__':
         '-d', '--debug', action='store_true', default=False,
         help='flag for debugging mode')
     arg_parser.add_argument(
-        '-H', '--host', type=str, default=None,
-        help=f'specifies the host for the microservice, defaults to "{None}"')
+        '-H', '--host', type=str, default=HOST,
+        help=f'specifies the host for the microservice, defaults to "{HOST}"')
     arg_parser.add_argument(
         '-p', '--port', type=int, default=PORT,
         help=f'specifies the port for the microservice, defaults to {PORT}')
