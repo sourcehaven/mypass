@@ -1,7 +1,6 @@
 import logging
 from argparse import ArgumentParser, Namespace
 from datetime import timedelta
-from typing import Optional
 
 import waitress
 from flask import Flask
@@ -23,7 +22,7 @@ DB_API_PORT = 5758
 
 class MyPassArgs(Namespace):
     debug: bool
-    host: Optional[str]
+    host: str
     port: int
     jwt_key: str
 
