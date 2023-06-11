@@ -52,17 +52,15 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
     try:
         login(pw=gen_api_key(64), host=app.config['DB_API_HOST'], port=app.config['DB_API_PORT'])
     except ProxyError as e:
-        logging.getLogger().error(e)
+        logging.getLogger().critical(e)
         logging.getLogger().critical(
             'DB API ERROR :: Failed signing into db api.\n'
             'This may cause unexpected behaviours, errors on db api endpoints, '
             'and failure on saving passwords. Make sure that the db service is up and running.')
 
     if debug:
-        logging.basicConfig(level=logging.DEBUG)
         app.run(host=host, port=port, debug=True)
     else:
-        logging.basicConfig(level=logging.ERROR)
         waitress.serve(app, host=host, port=port, channel_timeout=10, threads=1)
 
 
@@ -82,4 +80,8 @@ if __name__ == '__main__':
         help=f'specifies the secret jwt key by the application, defaults to "{JWT_KEY}" (should be changed)')
 
     args = arg_parser.parse_args(namespace=MyPassArgs)
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.ERROR)
     run(debug=args.debug, host=args.host, port=args.port, jwt_key=args.jwt_key)
