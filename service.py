@@ -6,16 +6,19 @@ import waitress
 from flask import Flask
 from flask_jwt_extended import JWTManager
 from mypass_logman import login
+from mypass_logman.exceptions import MissingSessionKeyError
 from mypass_logman.logman import gen_api_key
+from requests.exceptions import ProxyError
+from werkzeug.exceptions import UnsupportedMediaType
 
 from mypass.api import AuthApi, CryptoApi, TeapotApi, DbApi
 from mypass.exceptions import TokenExpiredException, FreshTokenRequired
 from mypass.middlewares import hooks
-from requests.exceptions import ProxyError
 
 HOST = 'localhost'
 PORT = 5757
 JWT_KEY = 'sourcehaven-service'
+SECRET_KEY = 'sourcehaven-service'
 DB_API_HOST = 'http://localhost'
 DB_API_PORT = 5758
 
@@ -25,17 +28,20 @@ class MyPassArgs(Namespace):
     host: str
     port: int
     jwt_key: str
+    secret_key: str
 
 
-def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
+def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY, secret_key=SECRET_KEY):
     app = Flask(__name__)
 
+    app.config['SECRET_KEY'] = secret_key
     app.config['JWT_SECRET_KEY'] = jwt_key
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(minutes=10)
     app.config['JWT_BLACKLIST_ENABLED'] = True
     app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
     app.config['DB_API_HOST'] = DB_API_HOST
     app.config['DB_API_PORT'] = DB_API_PORT
+    app.config['OPTIONAL_JWT_CHECKS'] = True
     app.config.from_object(__name__)
 
     app.register_blueprint(AuthApi)
@@ -45,7 +51,9 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY):
 
     app.register_error_handler(TokenExpiredException, hooks.TokenExpiredExceptionHandler(max_retries=1))
     app.register_error_handler(FreshTokenRequired, hooks.FreshTokenRequiredHandler(max_retries=1))
-    app.register_error_handler(KeyError, hooks.MissingSessionKeysHandler())
+    app.register_error_handler(MissingSessionKeyError, hooks.MissingSessionKeysHandler())
+    app.register_error_handler(UnsupportedMediaType, hooks.unsupported_media_type_handler)
+    app.register_error_handler(Exception, hooks.base_error_handler)
 
     jwt = JWTManager(app)
     jwt.token_in_blocklist_loader(hooks.check_if_token_in_blacklist)
@@ -77,11 +85,14 @@ if __name__ == '__main__':
         help=f'specifies the port for the microservice, defaults to {PORT}')
     arg_parser.add_argument(
         '-k', '--jwt-key', type=str, default=JWT_KEY,
-        help=f'specifies the secret jwt key by the application, defaults to "{JWT_KEY}" (should be changed)')
+        help=f'specifies the secret jwt key for the application, defaults to "{JWT_KEY}" (should be changed)')
+    arg_parser.add_argument(
+        '-S', '--secret-key', type=str, default=SECRET_KEY,
+        help=f'specifies the secret key for the application, defaults to "{SECRET_KEY}" (should be changed)')
 
     args = arg_parser.parse_args(namespace=MyPassArgs)
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.ERROR)
-    run(debug=args.debug, host=args.host, port=args.port, jwt_key=args.jwt_key)
+    run(debug=args.debug, host=args.host, port=args.port, jwt_key=args.jwt_key, secret_key=args.secret_key)

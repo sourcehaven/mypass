@@ -5,6 +5,7 @@ import flask
 import mypass_logman
 from flask import Response, request
 from mypass_logman.persistence import session
+from werkzeug.exceptions import UnsupportedMediaType
 
 from mypass.exceptions import FreshTokenRequired, TokenExpiredException, TokenRevokedException
 from mypass.persistence.blacklist.memory import blacklist
@@ -14,6 +15,14 @@ from mypass.persistence.blacklist.memory import blacklist
 def check_if_token_in_blacklist(jwt_header, jwt_payload):
     jti = jwt_payload['jti']
     return jti in blacklist
+
+
+def base_error_handler(err: Exception):
+    return {'msg': f'{err.__class__.__name__} :: {err}'}, 500
+
+
+def unsupported_media_type_handler(err: UnsupportedMediaType):
+    return {'msg': f'{err.__class__.__name__} :: {err}'}, 415
 
 
 def raise_if_client_error(response):
@@ -87,3 +96,4 @@ def missing_session_keys_handler(e):
         func = _get_callee()
         mypass_logman.login(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
         return func()
+    return base_error_handler(e)

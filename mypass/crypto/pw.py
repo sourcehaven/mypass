@@ -1,11 +1,12 @@
+import base64
 import secrets
 from typing import overload
 
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.hashes import SHA3_512
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from mypass.crypto import derive_key_from_pw
-
-CONNECTOR = '-<(|:::|)>-'
 
 
 def init_pw(nbytes: int = 256, return_bytes: bool = False):
@@ -95,11 +96,47 @@ def decrypt_secret(secret, pw, salt):
         raise ValueError('Arguments `secret`, `pw`, and `salt` should all be bytes or all be str objects.')
 
 
-def gen_master_token(pw: str):
+def gen_master_token(pw: str, salt: str):
     master_token = init_pw(nbytes=256)
-    master_token_pw = f'{master_token}{CONNECTOR}{pw}'
-    secret, salt = encrypt_secret(master_token_pw, pw)
+    secret = encrypt_secret(master_token, pw, salt)
+    return secret
+
+
+def gen_master_token_and_salt(pw: str):
+    master_token = init_pw(nbytes=256)
+    secret, salt = encrypt_secret(master_token, pw)
     return secret, salt
+
+
+def hash_pw_bytes(pw: bytes, salt: bytes):
+    kdf = PBKDF2HMAC(SHA3_512(), 64, salt, 480000)
+    encoded_hashed_pw = base64.urlsafe_b64encode(kdf.derive(pw))
+    return encoded_hashed_pw
+
+
+def hash_pw_str(pw: str, salt: str):
+    return hash_pw_bytes(pw.encode('utf-8'), salt.encode('utf-8')).decode('utf-8')
+
+
+@overload
+def hash_pw(pw: bytes, salt: bytes) -> bytes: ...
+
+
+@overload
+def hash_pw(pw: str, salt: str) -> str: ...
+
+
+def hash_pw(pw, salt):
+    if isinstance(pw, str) and isinstance(salt, str):
+        return hash_pw_str(pw, salt)
+    elif isinstance(pw, bytes) and isinstance(salt, bytes):
+        return hash_pw_bytes(pw, salt)
+    else:
+        raise ValueError('Arguments `pw`, and `salt` should all be bytes or all be str objects.')
+
+
+def check_pw(pw: str, salt: str, pw_hashed: str):
+    return hash_pw_str(pw, salt) == pw_hashed
 
 
 def _main():
@@ -109,11 +146,13 @@ def _main():
     print(f'Message       : {message}')
     print(f'Salt          : {salt}')
 
-    token, salt = gen_master_token('your-strong-password')
+    token, salt = gen_master_token_and_salt('your-strong-password')
     secret = decrypt_secret(token, 'your-strong-password', salt)
-    master_token, pw = secret.split(CONNECTOR)
-    print(f'Master Token  : {master_token}')
-    print(f'Password      : {pw}')
+    print(f'Master Token  : {token}')
+    print(f'Password      : {secret}')
+
+    hashed_pw = hash_pw('my-password', salt)
+    print('Password matching is', check_pw('my-password', salt, hashed_pw))
 
 
 if __name__ == '__main__':
