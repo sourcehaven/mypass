@@ -8,6 +8,13 @@ from mypass_logman.utils import BearerAuth
 from mypass import crypto
 
 
+UID_FIELD = '_uid'
+ID_FIELD = '_id'
+IDS_FIELD = '_ids'
+COND_FIELD = 'cond'
+HF_TRAIL = '__'
+
+
 def register_user(user: str, pw: str):
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
@@ -20,7 +27,7 @@ def register_user(user: str, pw: str):
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         json={'user': user, 'token': token, 'pw': hashed_pw, 'salt': salt},
         auth=BearerAuth(session['access_token']))
-    return resp
+    return resp.json(), resp.status_code
 
 
 def update_user(user: str, *, token: str, pw: str, salt: str):
@@ -32,10 +39,18 @@ def update_user(user: str, *, token: str, pw: str, salt: str):
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         json={'user': user, 'token': token, 'pw': pw, 'salt': salt},
         auth=BearerAuth(session['access_token']))
-    return resp
+    return resp.json(), resp.status_code
 
 
-def create_vault_pw(user: str, pw: str, *, fields: Mapping[str, Any], protected_fields: Iterable[str] = None):
+# TODO: make sure that master passwords can be queried by user id too
+def create_vault_pw(
+        uid: int,
+        user: str,
+        pw: str,
+        *,
+        fields: Mapping[str, Any],
+        protected_fields: Iterable[str] = None
+):
     """
     Create vault password. Fields with two trailing underscores `__` will be protected.
 
@@ -45,6 +60,7 @@ def create_vault_pw(user: str, pw: str, *, fields: Mapping[str, Any], protected_
         - password__
         - secret__
 
+    :param uid: user id, an integer
     :param user: save the password under this user
     :param pw: master password
     :param fields: save these fields
@@ -59,8 +75,10 @@ def create_vault_pw(user: str, pw: str, *, fields: Mapping[str, Any], protected_
         protected_fields = set()
 
     json_obj = {
-        '_user_id': user,
+        UID_FIELD: uid,
     }
+    # TODO: make sure that there are protected field present, and only then query for master token
+    #  making unnecessary queries is not cheap!
     protected_fields = set(protected_fields)
     secret_token, _, salt = get_master_info(user)
     token = crypto.decrypt_secret(secret_token, pw, salt)
@@ -73,7 +91,7 @@ def create_vault_pw(user: str, pw: str, *, fields: Mapping[str, Any], protected_
         if f in protected_fields:
             salt_used = True
             encrypted_value = crypto.encrypt_secret(fields[f], token, vault_salt)
-            json_obj[f'{f}__'] = encrypted_value
+            json_obj[f'{f}{HF_TRAIL}'] = encrypted_value
         else:
             json_obj[f] = fields[f]
 
@@ -85,7 +103,65 @@ def create_vault_pw(user: str, pw: str, *, fields: Mapping[str, Any], protected_
         f'{host}/api/db/tiny/vault/create',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
         json=json_obj, auth=BearerAuth(session['access_token']))
-    return resp
+    return resp.json(), resp.status_code
+
+
+def _make_decrypted_doc(document, pw):
+    document = document.copy()
+    salt = document.pop('_salt', None)
+    protected_fields = [k for k in document if k.endswith(HF_TRAIL)]
+    assert len(protected_fields) <= 0 or salt is not None, \
+        'There are protected fields but no salt. This should never happen.'
+    if salt is None:
+        decrypted_document = document
+    else:
+        decrypted_document = decrypt_hidden_fields(document, pw, salt)
+        decrypted_document['_protected_fields'] = protected_fields
+    return decrypted_document
+
+
+# TODO: make sure that master passwords can be queried by user id too
+def query_vault_pw(
+        uid: int,
+        user: str,
+        pw: str,
+        *,
+        doc_id: int = None,
+        cond: dict = None,
+        doc_ids: Iterable[int] = None
+):
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+
+    json_obj = {
+        UID_FIELD: uid,
+        ID_FIELD: doc_id,
+        IDS_FIELD: doc_ids,
+        COND_FIELD: cond,
+    }
+
+    # TODO: make sure that there is indeed a need for master token
+    #  making unnecessary queries is not cheap!
+    secret_token, _, salt = get_master_info(user)
+    token = crypto.decrypt_secret(secret_token, pw, salt)
+
+    resp = requests.post(
+        f'{host}/api/db/tiny/vault/read',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json=json_obj, auth=BearerAuth(session['access_token']))
+
+    if resp.status_code == 200:
+        # case of single document
+        if doc_id is not None:
+            document = resp.json()
+            decrypted_document = _make_decrypted_doc(document, token)
+            return decrypted_document, resp.status_code
+        else:
+            documents = resp.json()['documents']
+            decrypted_documents = [_make_decrypted_doc(doc, token) for doc in documents]
+            return {'documents': decrypted_documents}, resp.status_code
+
+    return resp.json(), resp.status_code
 
 
 def check_user_login(user: str, pw: str):
@@ -183,3 +259,14 @@ def refresh_master_token(token: str, pw: str, salt: str, new_pw: str):
     # encrypt the same master token with the new password
     new_token, new_salt = crypto.encrypt_secret(old_token, new_pw)
     return new_token, new_salt
+
+
+def decrypt_hidden_fields(mapping: dict[str, Any], pw: str, salt: str) -> dict[str, Any]:
+    new_mapping = {}
+    for k, v in mapping.items():
+        if k.endswith(HF_TRAIL):
+            new_v = crypto.decrypt_secret(v, pw, salt)
+            new_mapping[k.removesuffix(HF_TRAIL)] = new_v
+        else:
+            new_mapping[k] = v
+    return new_mapping
