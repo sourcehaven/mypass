@@ -178,7 +178,7 @@ def query_vault_entry(
             return {'entry': document}, resp.status_code
         # fetching multiple documents
         else:
-            documents = resp.json()['documents']
+            documents = resp.json()
             if any(_has_protected_fields(doc) for doc in documents):
                 secret_token, _, salt = get_master_info(user_or_uid)
                 token = crypto.decrypt_secret(secret_token, pw, salt)
