@@ -54,29 +54,33 @@ def update_master_pw():
 @DbApi.route('/api/db/vault/create', methods=['POST'])
 @RaiseErr.raise_if_unauthorized
 @jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
-def create_vault_pw():
+def create_vault_entry():
     """
     Returns:
         201 status code on success
     """
 
     request_obj = dict(request.json)
-    protected_fields = request_obj.pop('_protected_fields', None)
     identity = get_jwt_identity()
     uid = identity['uid']
     user = identity['user']
     pw = identity['pw']
     assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
-    result_json, status_code = utils.create_vault_pw(
-        uid, user, pw, fields=request_obj, protected_fields=protected_fields)
+    protected_fields = request_obj.pop('protected_fields', None)
+    fields = request_obj.pop('fields', None)
+    if fields is None:
+        return {'msg': 'BAD REQUEST :: Empty request will not be handled.'}, 400
+
+    result_json, status_code = utils.create_vault_entry(
+        uid, pw, fields=fields, protected_fields=protected_fields)
     return result_json, status_code
 
 
 @DbApi.route('/api/db/vault/read', methods=['POST'])
 @RaiseErr.raise_if_unauthorized
 @jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
-def query_vault_pw():
+def query_vault_entry():
     """
     Returns:
         200 status code on success
@@ -93,20 +97,36 @@ def query_vault_pw():
     assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
     doc_id = request_obj.get('_id', None)
-    cond = request_obj.get('cond', None)
     doc_ids = request_obj.get('_ids', None)
-    result_json, status_code = utils.query_vault_pw(uid, user, pw, doc_id=doc_id, cond=cond, doc_ids=doc_ids)
+    cond = request_obj.get('cond', None)
+    result_json, status_code = utils.query_vault_entry(uid, pw, doc_id=doc_id, cond=cond, doc_ids=doc_ids)
     return result_json, status_code
 
 
 @DbApi.route('/api/db/vault/update', methods=['POST'])
 @RaiseErr.raise_if_unauthorized
 @jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
-def update_vault_pw():
+def update_vault_entry():
     """
     Returns:
         200 status code on success
     """
+
+    request_obj = request.json
+    identity = get_jwt_identity()
+    uid = identity['uid']
+    user = identity['user']
+    pw = identity['pw']
+    assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
+
+    doc_id = request_obj.get('_id', None)
+    doc_ids = request_obj.get('_ids', None)
+    fields = request_obj.get('fields', None)
+    protected_fields = request_obj.get('protected_fields', None)
+    remove_keys = request_obj.get('remove_keys', None)
+    cond = request_obj.get('cond', None)
+
+    # TODO: Bad request if everything is None?
 
     # TODO: implementation things to watch for:
     #  - updating protected fields will require master token for decryption end re-encryption
@@ -119,11 +139,24 @@ def update_vault_pw():
 @DbApi.route('/api/db/vault/delete', methods=['POST'])
 @RaiseErr.raise_if_unauthorized
 @jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
-def delete_vault_pw():
+def delete_vault_entry():
     """
     Returns:
         200 status code on success
     """
+
+    request_obj = request.json
+    identity = get_jwt_identity()
+    uid = identity['uid']
+    user = identity['user']
+    pw = identity['pw']
+    assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
+
+    doc_id = request_obj.get('_id', None)
+    doc_ids = request_obj.get('_ids', None)
+    cond = request_obj.get('cond', None)
+
+    # TODO: Bad request if everything is None?
 
     # TODO: implementation things to watch for:
     #  - this should be basically implemented by the same logic as update
