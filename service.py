@@ -29,9 +29,10 @@ class MyPassArgs(Namespace):
     port: int
     jwt_key: str
     secret_key: str
+    db_api_key: str
 
 
-def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY, secret_key=SECRET_KEY):
+def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY, secret_key=SECRET_KEY, db_api_key=None):
     app = Flask(__name__)
 
     app.config['SECRET_KEY'] = secret_key
@@ -41,6 +42,7 @@ def run(debug=False, host=HOST, port=PORT, jwt_key=JWT_KEY, secret_key=SECRET_KE
     app.config['JWT_BLACKLIST_TOKEN_CHECKS'] = ['access', 'refresh']
     app.config['DB_API_HOST'] = DB_API_HOST
     app.config['DB_API_PORT'] = DB_API_PORT
+    app.config['DB_API_KEY'] = db_api_key
     app.config['OPTIONAL_JWT_CHECKS'] = True
     app.config.from_object(__name__)
 
@@ -89,10 +91,15 @@ if __name__ == '__main__':
     arg_parser.add_argument(
         '-S', '--secret-key', type=str, default=SECRET_KEY,
         help=f'specifies the secret key for the application, defaults to "{SECRET_KEY}" (should be changed)')
+    arg_parser.add_argument(
+        '-P', '--db-api-key', type=str, default=None,
+        help=f'specifies the secret db-api key used by the db-service, defaults to "{None}" (should be set)')
 
     args = arg_parser.parse_args(namespace=MyPassArgs)
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
     else:
         logging.basicConfig(level=logging.ERROR)
-    run(debug=args.debug, host=args.host, port=args.port, jwt_key=args.jwt_key, secret_key=args.secret_key)
+    run(
+        debug=args.debug, host=args.host, port=args.port, jwt_key=args.jwt_key, secret_key=args.secret_key,
+        db_api_key=args.db_api_key)

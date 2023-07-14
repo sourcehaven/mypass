@@ -80,9 +80,10 @@ def fresh_access_token_required_handler(e):
     logging.getLogger().info('Acquiring a new fresh access token.')
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
+    db_api_key = flask.current_app.config['DB_API_KEY']
     logging.getLogger().info('Retrying previous action.')
     func = _get_callee()
-    mypass_logman.login(pw=mypass_logman.logman.gen_api_key(64), host=host, port=port)
+    mypass_logman.login(pw=db_api_key, host=host, port=port)
     return func()
 
 

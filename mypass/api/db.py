@@ -1,12 +1,14 @@
+import logging
 import os
 
 import flask
 from flask import Blueprint, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
 from werkzeug.exceptions import UnsupportedMediaType
 
 from mypass import crypto
 from mypass.middlewares import RaiseErr
+from persistence.blacklist.memory import blacklist
 from . import _utils as utils
 
 DbApi = Blueprint('db', __name__)
@@ -33,20 +35,25 @@ def update_master_pw():
 
     request_obj = request.json
     identity = get_jwt_identity()
+    uid = identity['uid']
     user = identity['user']
     pw = identity['pw']
     new_pw = request_obj['pw']
-    assert user is not None and pw is not None, 'None user identity should not happen.'
+    assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
-    res = utils.get_master_info(user)
+    res = utils.get_master_info(uid)
     if res is not None:
         secret_token, secret_pw, salt = res
         token, salt = utils.refresh_master_token(secret_token, pw, salt, new_pw)
         hashed_pw = crypto.hash_pw(new_pw, salt)
-        result_json, status_code = utils.update_user(user, token=token, pw=hashed_pw, salt=salt)
+        result_json, status_code = utils.update_user(uid, token=token, pw=hashed_pw, salt=salt)
 
         if status_code == 200:
-            return flask.redirect(flask.url_for('auth.login', _method='POST', uid=result_json['_id']), 307)
+            # blacklist old token
+            jti = get_jwt()['jti']
+            logging.getLogger().debug(f'Blacklisting token: {jti}.')
+            blacklist.add(jti)
+            return flask.redirect(flask.url_for('auth.login', _method='POST', uid=result_json['id']), 307)
         return result_json, status_code
     return {'msg': f'AUTHORIZATION FAILURE :: Could not update master password for user {user}.'}, 401
 
@@ -96,10 +103,40 @@ def query_vault_entry():
     pw = identity['pw']
     assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
-    doc_id = request_obj.get('_id', None)
-    doc_ids = request_obj.get('_ids', None)
-    cond = request_obj.get('cond', None)
-    result_json, status_code = utils.query_vault_entry(uid, pw, doc_id=doc_id, cond=cond, doc_ids=doc_ids)
+    pk = request_obj.get('id', None)
+    pks = request_obj.get('ids', None)
+    crit = request_obj.get('crit', None)
+
+    assert pk is None or pks is None, 'Making a request with both id and ids at the same time is invalid.'
+    result_json, status_code = utils.query_vault_entry(uid, pw, pk=pk, crit=crit, pks=pks)
+    return result_json, status_code
+
+
+@DbApi.route('/api/db/vault/raw_read', methods=['POST'])
+@RaiseErr.raise_if_unauthorized
+@jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
+def query_vault_entry():
+    """
+    Returns:
+        200 status code on success
+    """
+
+    try:
+        request_obj = request.json
+    except UnsupportedMediaType:
+        request_obj = {}
+    identity = get_jwt_identity()
+    uid = identity['uid']
+    user = identity['user']
+    pw = identity['pw']
+    assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
+
+    pk = request_obj.get('id', None)
+    pks = request_obj.get('ids', None)
+    crit = request_obj.get('crit', None)
+
+    assert pk is None or pks is None, 'Making a request with both id and ids at the same time is invalid.'
+    result_json, status_code = utils.query_raw_vault_entry(uid, pk=pk, crit=crit, pks=pks)
     return result_json, status_code
 
 
@@ -119,12 +156,11 @@ def update_vault_entry():
     pw = identity['pw']
     assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
-    doc_id = request_obj.get('_id', None)
-    doc_ids = request_obj.get('_ids', None)
+    pk = request_obj.get('id', None)
+    pks = request_obj.get('ids', None)
     fields = request_obj.get('fields', None)
     protected_fields = request_obj.get('protected_fields', None)
-    remove_keys = request_obj.get('remove_keys', None)
-    cond = request_obj.get('cond', None)
+    crit = request_obj.get('crit', None)
 
     # TODO: Bad request if everything is None?
 
@@ -152,9 +188,9 @@ def delete_vault_entry():
     pw = identity['pw']
     assert uid is not None and user is not None and pw is not None, 'None user identity should not happen.'
 
-    doc_id = request_obj.get('_id', None)
-    doc_ids = request_obj.get('_ids', None)
-    cond = request_obj.get('cond', None)
+    pk = request_obj.get('id', None)
+    pks = request_obj.get('ids', None)
+    crit = request_obj.get('crit', None)
 
     # TODO: Bad request if everything is None?
 

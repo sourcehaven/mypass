@@ -17,7 +17,8 @@ def registration():
     pw = request.json['pw']
     result_json, status_code = utils.register_user(user, pw)
     if status_code == 201:
-        return flask.redirect(flask.url_for('auth.login', _method='POST', uid=result_json['_id']), 307)
+        # redirect request to login
+        return flask.redirect(flask.url_for('auth.login', _method='POST', uid=result_json['id']), 307)
     return result_json, status_code
 
 
@@ -31,6 +32,8 @@ def login():
     # then passing along user in request is mandatory
     if identity is None:
         identity = {'uid': request_args['uid'], 'user': request_obj['user'], 'pw': request_obj['pw']}
+    assert 'uid' in identity and 'user' in identity and 'pw' in identity
+    assert identity['uid'] is not None and identity['user'] is not None and identity['pw'] is not None
 
     user = identity['user']
     pw = identity['pw']
