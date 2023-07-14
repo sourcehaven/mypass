@@ -109,13 +109,18 @@ def query_vault_entry():
 
     assert pk is None or pks is None, 'Making a request with both id and ids at the same time is invalid.'
     result_json, status_code = utils.query_vault_entry(uid, pw, pk=pk, crit=crit, pks=pks)
+    if status_code == 200:
+        result_json = utils.clear_hidden(result_json)
+        if isinstance(result_json, list):
+            return [{'entity': e} for e in result_json], status_code
+        return {'entity': result_json}, status_code
     return result_json, status_code
 
 
 @DbApi.route('/api/db/vault/raw_read', methods=['POST'])
 @RaiseErr.raise_if_unauthorized
 @jwt_required(optional=bool(int(os.environ.get('MYPASS_OPTIONAL_JWT_CHECKS', 0))))
-def query_vault_entry():
+def query_raw_vault_entry():
     """
     Returns:
         200 status code on success
@@ -137,6 +142,12 @@ def query_vault_entry():
 
     assert pk is None or pks is None, 'Making a request with both id and ids at the same time is invalid.'
     result_json, status_code = utils.query_raw_vault_entry(uid, pk=pk, crit=crit, pks=pks)
+    if status_code == 200:
+        protected_fields = utils.get_protected_fields(result_json)
+        result_json = utils.clear_hidden(result_json)
+        if isinstance(result_json, list):
+            return [{'entity': e, 'protected_fields': p} for e, p in zip(result_json, protected_fields)], status_code
+        return {'entity': result_json, 'protected_fields': protected_fields}, status_code
     return result_json, status_code
 
 
@@ -162,14 +173,9 @@ def update_vault_entry():
     protected_fields = request_obj.get('protected_fields', None)
     crit = request_obj.get('crit', None)
 
-    # TODO: Bad request if everything is None?
-
-    # TODO: implementation things to watch for:
-    #  - updating protected fields will require master token for decryption end re-encryption
-    #  - generate and save new salt, under _salt -> similarly to how its done in vault pw creation
-    #  - returning somewhat meaningful error message if no success
-    #  - implement helper methods similar to the above mentioned endpoints
-    raise NotImplementedError()
+    result_json, status_code = utils.update_vault_entry(
+        uid, pw, fields=fields, protected_fields=protected_fields, crit=crit, pk=pk, pks=pks)
+    return result_json, status_code
 
 
 @DbApi.route('/api/db/vault/delete', methods=['POST'])
@@ -192,9 +198,6 @@ def delete_vault_entry():
     pks = request_obj.get('ids', None)
     crit = request_obj.get('crit', None)
 
-    # TODO: Bad request if everything is None?
-
-    # TODO: implementation things to watch for:
-    #  - this should be basically implemented by the same logic as update
-    #  - except you do not need to watch out for decrypting and encrypting
-    raise NotImplementedError()
+    result_json, status_code = utils.delete_vault_entry(
+        uid, pw, crit=crit, pk=pk, pks=pks)
+    return result_json, status_code

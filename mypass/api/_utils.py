@@ -11,6 +11,7 @@ ID_FIELD = 'id'
 IDS_FIELD = 'ids'
 UID_FIELD = 'uid'
 CRIT_FIELD = 'crit'
+ENTITY_FIELD = 'fields'
 SALT_FIELD = '_salt'
 PROTECTED_FIELD = '_protected_fields'
 DEL_OP = '__DEL_OP__'
@@ -41,30 +42,124 @@ def update_user(__uid: int | str, *, token: str, pw: str, salt: str):
     return resp.json(), resp.status_code
 
 
-def create_vault_entry(__uid, pw, *, fields, protected_fields=None):
+def check_user_login(__uid: str | int, pw: str):
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+    resp = requests.post(
+        f'{host}/api/db/master/read',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json={'user': __uid}, auth=BearerAuth(session['access_token']))
+
+    if resp.status_code == 200:
+        response_obj = resp.json()
+        try:
+            secret = response_obj['pw']
+            salt = response_obj['salt']
+            if crypto.check_pw(pw, salt, secret):
+                return True
+        except KeyError:
+            pass
+    return False
+
+
+def get_user_salt(__uid: str | int):
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+    resp = requests.post(
+        f'{host}/api/db/master/read',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json={'user': __uid}, auth=BearerAuth(session['access_token']))
+
+    if resp.status_code == 200:
+        response_obj = resp.json()
+        try:
+            salt: str = response_obj['salt']
+            return salt
+        except KeyError:
+            pass
+    return None
+
+
+def get_user_pw(__uid: str | int):
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+    resp = requests.post(
+        f'{host}/api/db/master/read',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json={'user': __uid}, auth=BearerAuth(session['access_token']))
+
+    if resp.status_code == 200:
+        response_obj = resp.json()
+        try:
+            pw: str = response_obj['pw']
+            return pw
+        except KeyError:
+            pass
+    return None
+
+
+def get_master_info(__uid: str | int) -> tuple[str, str, str] | None:
     """
-    Create vault password. Fields specified in arg `protected_fields` will be encrypted.
+    Returns master token, master password for user, and salt.
 
-    Parameters:
-        __uid (int | str): user identification
-        pw (str): raw master password
-        fields (Mapping[str, Any]): entity fields to save
-        protected_fields (Iterable[str]): name of fields that should be protected by encryption
-
-    Returns:
-        Response of pw create query
+    :param __uid: retrieve this user's password info
+    :return: (token, pw, salt)
     """
 
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
+    resp = requests.post(
+        f'{host}/api/db/master/read',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json={'user': __uid}, auth=BearerAuth(session['access_token']))
 
+    if resp.status_code == 200:
+        response_obj = resp.json()
+        try:
+            return response_obj['token'], response_obj['pw'], response_obj['salt']
+        except KeyError:
+            pass
+    return None
+
+
+def refresh_master_token(token: str, pw: str, salt: str, new_pw: str):
+    """
+    Generates newly encrypted master token, and random salt, using the old password for decryption,
+    and re-encrypting it with the new password.
+
+    :param token: the current, encrypted master token
+    :param new_pw: the new password
+    :param pw: the old password
+    :param salt: old salt, used for generating the token
+    :return: new master token, and salt
+    """
+
+    # decrypt old master token with password (stored as pw) in jwt manager
+    old_token = crypto.decrypt_secret(token, pw, salt)
+    # encrypt the same master token with the new password
+    new_token, new_salt = crypto.encrypt_secret(old_token, new_pw)
+    return new_token, new_salt
+
+
+def make_entry(__uid, pw, *, fields, protected_fields=None):
+    """
+    Makes an entry with encrypted fields if requested so.
+
+    Parameters:
+        __uid (int | str):
+        pw (str):
+        fields (Mapping):
+        protected_fields (Iterable[str]):
+
+    Returns:
+        Vault entry.
+    """
+
+    entity_fields = dict(fields)
     if protected_fields is None:
         protected_fields = set()
-
-    json_obj = {
-        UID_FIELD: __uid,
-    }
-    protected_fields = set(protected_fields)
+    else:
+        protected_fields = set(protected_fields)
 
     token: str | None = None
     vault_salt: str | None = None
@@ -80,15 +175,43 @@ def create_vault_entry(__uid, pw, *, fields, protected_fields=None):
             salt_used = True
             assert token is not None and vault_salt is not None, 'Token and salt should not be None.'
             encrypted_value = crypto.encrypt_secret(fields[f], token, vault_salt)
-            json_obj[f] = encrypted_value
+            entity_fields[f] = encrypted_value
         else:
-            json_obj[f] = fields[f]
+            entity_fields[f] = fields[f]
 
     # store the salt, if it was used
     if salt_used:
-        json_obj[SALT_FIELD] = vault_salt
-        json_obj[PROTECTED_FIELD] = protected_fields
+        entity_fields[SALT_FIELD] = vault_salt
+        entity_fields[PROTECTED_FIELD] = protected_fields
 
+    return entity_fields
+
+
+def create_vault_entry(__uid, pw, *, pk=None, fields, protected_fields=None):
+    """
+    Create vault password. Fields specified in arg `protected_fields` will be encrypted.
+
+    Parameters:
+        __uid (int | str): user identification
+        pw (str): raw master password
+        pk (int | str): predefined primary key for the object for saving
+        fields (Mapping[str, Any]): entity fields to save
+        protected_fields (Iterable[str]): name of fields that should be protected by encryption
+
+    Returns:
+        (tuple[dict, int]):
+        Response of pw create query
+    """
+
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+
+    entity_fields = make_entry(__uid, pw, fields=fields, protected_fields=protected_fields)
+    json_obj = {
+        UID_FIELD: __uid,
+        ID_FIELD: pk,
+        ENTITY_FIELD: entity_fields
+    }
     resp = requests.post(
         f'{host}/api/db/vault/create',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
@@ -137,19 +260,29 @@ def del_helper_fields(fields):
     return fields
 
 
+def get_protected_fields(document):
+    if isinstance(document, list):
+        return [d.get(PROTECTED_FIELD, None) for d in document]
+    return document.get(PROTECTED_FIELD, None)
+
+
+def clear_hidden(fields):
+    if isinstance(fields, list):
+        return [{k: v for k, v in fld.items() if not k.startswith('_')} for fld in fields]
+    return {k: v for k, v in fields.items() if not k.startswith('_')}
+
+
 def _make_query_result(is_single, raw_qr, token=None):
     document: dict
     if is_single:
         document = raw_qr
         if token is not None:
             document = unprotect_fields(raw_qr, token)
-        document = del_helper_fields(document)
         return document
     documents = []
     for document in raw_qr:
         if token is not None:
             document = unprotect_fields(document, token)
-        document = del_helper_fields(document)
         documents.append(document)
     return documents
 
@@ -167,7 +300,7 @@ def query_vault_entry(__uid, pw, *, crit=None, pk=None, pks=None):
         pks (Iterable[int | str]): allowed primary keys
 
     Returns:
-        (dict | list[dict]):
+        (tuple[dict | list[dict], int]):
         Single entry in a form of {'entry': ..., NotRequired['protected_fields']}, if requested by pk
         Multiple entries in a list [{'entry': ..., NotRequired['protected_fields']}, ...] otherwise.
     """
@@ -209,7 +342,7 @@ def query_raw_vault_entry(__uid, *, crit=None, pk=None, pks=None):
         pks (Iterable[int | str]): allowed primary keys
 
     Returns:
-        (dict | list[dict]):
+        (tuple[dict | list[dict], int]):
         Single entry in a form of {'entry': ..., NotRequired['protected_fields']}, if requested by pk
         Multiple entries in a list [{'entry': ..., NotRequired['protected_fields']}, ...] otherwise.
     """
@@ -231,23 +364,44 @@ def query_raw_vault_entry(__uid, *, crit=None, pk=None, pks=None):
     return resp.json(), resp.status_code
 
 
-def update_vault_entry(
-        __uid: str | int,
-        pw: str,
-        *,
-        fields: Mapping = None,
-        protected_fields: Iterable[str] = None,
-        remove_keys: Iterable[str] = None,
-        crit: dict = None,
-        pk: int = None,
-        pks: Iterable[int] = None
-):
-    # TODO:
-    #  1: case of protecting an unprotected field
-    #  2: case of unprotecting a protected field
-    #  3: key removal
-    #  4: simple update
-    raise NotImplementedError()
+def update_vault_entry(__uid, pw, *, fields, protected_fields=None, crit=None, pk=None, pks=None):
+    """
+    Updates vault entries based on given keys and criteria.
+    If single key is given, only one record will be updated.
+
+    Parameters:
+        __uid (int | str): user identification
+        pw (str): raw user password
+        fields (Mapping): fields to update
+        protected_fields (Iterable[str]): list of protected fields to be encrypted
+        crit (dict): query criteria
+        pk (int | str): single allowed primary key
+        pks (Iterable[int | str]): allowed primary keys
+
+    Returns:
+        (tuple[dict | list[dict], int]):
+        Updated entry id or ids.
+    """
+
+    assert protected_fields is None or pk is not None, \
+        'Updating protected should only happen on a single entity.'
+
+    host = flask.current_app.config['DB_API_HOST']
+    port = flask.current_app.config['DB_API_PORT']
+
+    entity_fields = make_entry(__uid, pw, fields=fields, protected_fields=protected_fields)
+    json_obj = {
+        UID_FIELD: __uid,
+        ID_FIELD: pk,
+        IDS_FIELD: pks,
+        CRIT_FIELD: crit,
+        ENTITY_FIELD: entity_fields
+    }
+    resp = requests.post(
+        f'{host}/api/db/vault/update',
+        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
+        json=json_obj, auth=BearerAuth(session['access_token']))
+    return resp.json(), resp.status_code
 
 
 def delete_vault_entry(
@@ -258,101 +412,33 @@ def delete_vault_entry(
         pk: int = None,
         pks: Iterable[int] = None
 ):
-    raise NotImplementedError()
-
-
-def check_user_login(__uid: str | int, pw: str):
-    host = flask.current_app.config['DB_API_HOST']
-    port = flask.current_app.config['DB_API_PORT']
-    resp = requests.post(
-        f'{host}/api/db/master/read',
-        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json={'user': __uid}, auth=BearerAuth(session['access_token']))
-
-    if resp.status_code == 200:
-        response_obj = resp.json()
-        try:
-            secret = response_obj['pw']
-            salt = response_obj['salt']
-            if crypto.check_pw(pw, salt, secret):
-                return True
-        except KeyError:
-            pass
-    return False
-
-
-def get_user_salt(__uid: str | int) -> str | None:
-    host = flask.current_app.config['DB_API_HOST']
-    port = flask.current_app.config['DB_API_PORT']
-    resp = requests.post(
-        f'{host}/api/db/master/read',
-        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json={'user': __uid}, auth=BearerAuth(session['access_token']))
-
-    if resp.status_code == 200:
-        response_obj = resp.json()
-        try:
-            return response_obj['salt']
-        except KeyError:
-            pass
-    return None
-
-
-def get_user_pw(__uid: str | int) -> str | None:
-    host = flask.current_app.config['DB_API_HOST']
-    port = flask.current_app.config['DB_API_PORT']
-    resp = requests.post(
-        f'{host}/api/db/master/read',
-        proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json={'user': __uid}, auth=BearerAuth(session['access_token']))
-
-    if resp.status_code == 200:
-        response_obj = resp.json()
-        try:
-            return response_obj['pw']
-        except KeyError:
-            pass
-    return None
-
-
-def get_master_info(__uid: str | int) -> tuple[str, str, str] | None:
     """
-    Returns master token, master password for user, and salt.
+    Deletes vault entries based on given keys and criteria.
+    If single key is given, only a single record will be deleted.
 
-    :param __uid: retrieve this user's password info
-    :return: (token, pw, salt)
+    Parameters:
+        __uid (int | str): user identification
+        pw (str): raw user password
+        crit (dict): query criteria
+        pk (int | str): single allowed primary key
+        pks (Iterable[int | str]): allowed primary keys
+
+    Returns:
+        (tuple[dict | list[dict], int]):
+        Deleted entry id or ids.
     """
 
     host = flask.current_app.config['DB_API_HOST']
     port = flask.current_app.config['DB_API_PORT']
+
+    json_obj = {
+        UID_FIELD: __uid,
+        ID_FIELD: pk,
+        IDS_FIELD: pks,
+        CRIT_FIELD: crit,
+    }
     resp = requests.post(
-        f'{host}/api/db/master/read',
+        f'{host}/api/db/vault/delete',
         proxies={'http': f'{host}:{port}', 'https': f'{host}:{port}'},
-        json={'user': __uid}, auth=BearerAuth(session['access_token']))
-
-    if resp.status_code == 200:
-        response_obj = resp.json()
-        try:
-            return response_obj['token'], response_obj['pw'], response_obj['salt']
-        except KeyError:
-            pass
-    return None
-
-
-def refresh_master_token(token: str, pw: str, salt: str, new_pw: str):
-    """
-    Generates newly encrypted master token, and random salt, using the old password for decryption,
-    and re-encrypting it with the new password.
-
-    :param token: the current, encrypted master token
-    :param new_pw: the new password
-    :param pw: the old password
-    :param salt: old salt, used for generating the token
-    :return: new master token, and salt
-    """
-
-    # decrypt old master token with password (stored as pw) in jwt manager
-    old_token = crypto.decrypt_secret(token, pw, salt)
-    # encrypt the same master token with the new password
-    new_token, new_salt = crypto.encrypt_secret(old_token, new_pw)
-    return new_token, new_salt
+        json=json_obj, auth=BearerAuth(session['access_token']))
+    return resp.json(), resp.status_code
