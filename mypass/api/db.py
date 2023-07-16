@@ -8,7 +8,7 @@ from werkzeug.exceptions import UnsupportedMediaType
 
 from mypass import crypto
 from mypass.middlewares import RaiseErr
-from persistence.blacklist.memory import blacklist
+from mypass.persistence.blacklist.memory import blacklist
 from . import _utils as utils
 
 DbApi = Blueprint('db', __name__)
